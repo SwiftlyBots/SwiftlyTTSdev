@@ -169,6 +169,7 @@ class VoiceReadCog(commands.Cog):
         return user_id in self.banlist
 
     @app_commands.command(name="join", description="ボイスチャンネルに参加")
+    @commands.cooldown(1, 10, commands.BucketType.user)  # 追加: 10秒に1回
     async def join(self, interaction: discord.Interaction):
         if await self.is_banned(interaction.user.id):
             await interaction.response.send_message("このコマンドを実行する権限がありません。", ephemeral=True)
@@ -269,6 +270,7 @@ class VoiceReadCog(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="leave", description="ボイスチャンネルから退出")
+    @commands.cooldown(1, 10, commands.BucketType.user)  # 追加: 10秒に1回
     async def leave(self, interaction: discord.Interaction):
         if await self.is_banned(interaction.user.id):
             await interaction.response.send_message("このコマンドを実行する権限がありません。", ephemeral=True)
@@ -1023,6 +1025,26 @@ class VoiceReadCog(commands.Cog):
                         "INSERT INTO vc_state (guild_id, channel_id, tts_channel_id) VALUES ($1, $2, $3) ON CONFLICT (guild_id) DO UPDATE SET channel_id = $2, tts_channel_id = $3",
                         gid, vc.channel.id, tts_channel_id
                     )
+
+    async def cog_app_command_error(self, interaction: discord.Interaction, error):
+        """アプリコマンドのエラーハンドラ（レートリミット対応）"""
+        if isinstance(error, commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"このコマンドはレートリミット中です。あと{error.retry_after:.1f}秒後に再度お試しください。",
+                ephemeral=True
+            )
+        else:
+            raise error
+
+    async def cog_command_error(self, ctx, error):
+        """通常コマンドのエラーハンドラ（レートリミット対応）"""
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(
+                f"このコマンドはレートリミット中です。あと{error.retry_after:.1f}秒後に再度お試しください。",
+                delete_after=10
+            )
+        else:
+            raise error
 
 async def setup(bot):
     await bot.add_cog(VoiceReadCog(bot))
